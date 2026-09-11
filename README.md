@@ -179,6 +179,12 @@ Windows Python Launcher가 해당 버전을 찾지 못하면 설치된 Python 3.
 
 Notebook은 `01_data_understanding.ipynb`부터 `06_explainability.ipynb`까지 번호 순서로 실행합니다. 데이터는 `ucimlrepo`를 통해 내려받으므로 최초 실행 시 네트워크 연결이 필요합니다.
 
+데이터 품질 검증 모듈의 단위 테스트는 프로젝트 루트에서 다음과 같이 실행합니다.
+
+```powershell
+python -m pytest tests/test_data_quality.py
+```
+
 ## 13. Tech Stack
 
 - Python 3.13

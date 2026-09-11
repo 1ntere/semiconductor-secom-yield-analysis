@@ -187,6 +187,22 @@ Notebook은 `01_data_understanding.ipynb`부터 `06_explainability.ipynb`까지 
 python -m pytest tests/test_data_quality.py
 ```
 
+### Data quality report
+
+UCI SECOM 데이터는 다음 명령으로 JSON 및 standalone HTML 품질 리포트를 생성합니다.
+
+```powershell
+python scripts/generate_quality_report.py --uci-secom
+```
+
+일반 CSV는 general preset이 기본이며, 다음과 같이 명시해서 실행할 수도 있습니다. SECOM 형식의 CSV에는 `--preset secom`을 사용합니다.
+
+```powershell
+python scripts/generate_quality_report.py --input-csv PATH --preset general
+```
+
+기본 출력 위치는 Git에서 제외된 `reports/data_quality/`입니다. `error`가 없으면 `report.passed`는 `True`이며, `warning`과 `not_evaluated`는 결과에 표시되지만 단독으로 실패를 의미하지 않습니다. 오류가 있는 리포트에 non-zero 종료 코드가 필요하면 `--fail-on-error`를 사용합니다.
+
 ## 13. Tech Stack
 
 - Python 3.13

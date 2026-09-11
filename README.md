@@ -93,6 +93,8 @@ Primary metric은 희소한 Fail 클래스의 precision-recall trade-off를 반�
 
 ![Cross-validation PR-AUC comparison](docs/figures/modeling_cv_pr_auc_comparison.png)
 
+Feature selection이 전체 outer-train에서 수행된 뒤 CV가 적용되었으므로, 해당 결과는 historical baseline이며 완전한 fold-safe 추정치가 아닙니다.
+
 ![Final hold-out PR and ROC curves](docs/figures/modeling_final_pr_roc_curves.png)
 
 선택 threshold의 confusion matrix는 **TN 176 / FP 117 / FN 3 / TP 18**입니다.

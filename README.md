@@ -203,6 +203,17 @@ python scripts/generate_quality_report.py --input-csv PATH --preset general
 
 기본 출력 위치는 Git에서 제외된 `reports/data_quality/`입니다. `error`가 없으면 `report.passed`는 `True`이며, `warning`과 `not_evaluated`는 결과에 표시되지만 단독으로 실패를 의미하지 않습니다. 오류가 있는 리포트에 non-zero 종료 코드가 필요하면 `--fail-on-error`를 사용합니다.
 
+### Fold-safe modeling evaluation
+
+기존 historical baseline은 outer-train 전체에서 feature selection을 먼저 수행한 뒤 CV를 적용했으므로 validation fold 정보가 선택 과정에 간접적으로 반영될 수 있습니다. Fold-safe 평가는 결측률·constant 제거, median imputation, correlation pruning, MI/RF selection을 각 CV training fold에서만 학습하고 해당 validation fold에는 transform만 적용합니다.
+
+```powershell
+python scripts/run_fold_safe_modeling.py --uci-secom
+python scripts/run_fold_safe_modeling.py --input-csv PATH --target-column class
+```
+
+식별자나 파생 결과 컬럼은 `--exclude-column COLUMN`을 반복해 명시적으로 제외할 수 있습니다. 기본 결과는 Git에서 제외된 `reports/fold_safe_modeling/fold_safe_results.json`과 `fold_safe_fold_metrics.csv`에 저장되며, 같은 출력 경로의 파일은 새 실행 결과로 덮어씁니다. 제조 불량 class `1`이 희소하므로 PR-AUC를 주 지표로 사용하며, 기존 20% historical hold-out은 평가하거나 변경하지 않습니다. 이번 결과는 단일 5-fold Stratified CV이며 repeated CV, threshold tuning, 비용 함수, temporal validation은 후속 단계 범위입니다.
+
 ## 13. Tech Stack
 
 - Python 3.13

@@ -229,6 +229,19 @@ python scripts/run_repeated_cv.py --from-validation-results reports/fold_safe_mo
 
 반복 fold의 training data는 서로 겹치므로 25개 결과를 독립 표본처럼 해석하거나 p-value로 과장하지 않습니다. 후보도 Validation 3.1에서 정한 exploratory shortlist이며 외부 검증을 거친 최종 선택이 아닙니다. threshold 최적화와 시간 순서 기반 검증은 아직 적용하지 않았습니다.
 
+### Cost-based threshold sensitivity analysis
+
+Improvement 4의 평균 PR-AUC 1위였던 exploratory 후보 `all_features × random_forest_balanced`에 대해 예시 비용 단위의 FN:FP 민감도 분석을 수행합니다. 이 후보가 모든 모델보다 확정적으로 우월하다는 의미가 아니며, 비용은 실제 제조 손실이나 금액이 아닙니다.
+
+```powershell
+python scripts/run_cost_threshold.py --uci-secom
+python scripts/run_cost_threshold.py --input-csv PATH --target-column class --cost-scenario 1:1 --cost-scenario 5:1 --cost-scenario 10:1
+```
+
+20% outer hold-out은 분리만 하고 평가하지 않습니다. 나머지 데이터의 5-fold outer CV 안에서 각 training portion에 3-fold inner CV를 적용하고, inner OOF 확률만으로 비용 최소 threshold를 선택합니다. 비교 정책은 threshold 0.5, 전부 정상, 전부 불량입니다. 판정 규칙은 `P(class=1) >= threshold`, 비용은 `FP × cost_fp + FN × cost_fn`입니다.
+
+기본 시나리오는 FN:FP `1:1`, `5:1`, `10:1`입니다. `--cost-scenario FN:FP`를 반복하면 양의 유한한 값을 명시할 수 있습니다. 결과는 Git에서 제외된 `reports/cost_threshold/`의 strict JSON과 고정-schema CSV에 저장됩니다. inner OOF와 outer 재학습 모델의 확률 척도가 다를 수 있으며 calibration은 추가하지 않습니다. 전체 outer-training inner OOF의 단일 후보 threshold는 `candidate_threshold_not_holdout_evaluated`로 표시합니다.
+
 ## 13. Tech Stack
 
 - Python 3.13

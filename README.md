@@ -242,6 +242,19 @@ python scripts/run_cost_threshold.py --input-csv PATH --target-column class --co
 
 기본 시나리오는 FN:FP `1:1`, `5:1`, `10:1`입니다. `--cost-scenario FN:FP`를 반복하면 양의 유한한 값을 명시할 수 있습니다. 결과는 Git에서 제외된 `reports/cost_threshold/`의 strict JSON과 고정-schema CSV에 저장됩니다. inner OOF와 outer 재학습 모델의 확률 척도가 다를 수 있으며 calibration은 추가하지 않습니다. 전체 outer-training inner OOF의 단일 후보 threshold는 `candidate_threshold_not_holdout_evaluated`로 표시합니다.
 
+### Exploratory temporal validation and feature drift
+
+UCI는 timestamp를 각 pass/fail line test의 특정 test point에 연결된 시각이라고 설명하지만 timezone, 실제 생산 순서 보장, lot·wafer 식별자는 제공하지 않습니다. 따라서 timestamp는 **제한적으로 적합**하며 다음 결과는 독립적인 미래 생산 검증이 아니라, 기존 random outer-training 80% 내부의 탐색적 forward validation입니다.
+
+```powershell
+python scripts/run_temporal_validation.py --uci-secom
+python scripts/run_temporal_validation.py --input-csv PATH --target-column class --timestamp-column timestamp
+```
+
+동일 timestamp를 분리하지 않는 expanding-window 3-split을 사용하며 모든 training 시각은 validation보다 엄격히 이전입니다. 각 split의 전처리와 `all_features × random_forest_balanced` 모델은 과거 training 구간에서만 새로 학습하고, 분류 threshold는 고정 0.5입니다. Improvement 5의 비용 threshold는 사용하지 않습니다.
+
+Feature drift는 training-only quantile bin과 별도 missing bin으로 PSI를 계산합니다. PSI는 변화 후보를 정렬하는 탐색적 휴리스틱이며 원인, 설비 고장 또는 인과관계를 뜻하지 않습니다. 결과는 Git에서 제외된 `reports/temporal_validation/`의 strict JSON, 성능 CSV, feature drift CSV에 저장됩니다.
+
 ## 13. Tech Stack
 
 - Python 3.13

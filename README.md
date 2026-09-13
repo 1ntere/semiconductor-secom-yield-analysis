@@ -214,6 +214,21 @@ python scripts/run_fold_safe_modeling.py --input-csv PATH --target-column class
 
 식별자나 파생 결과 컬럼은 `--exclude-column COLUMN`을 반복해 명시적으로 제외할 수 있습니다. 기본 결과는 Git에서 제외된 `reports/fold_safe_modeling/fold_safe_results.json`과 `fold_safe_fold_metrics.csv`에 저장되며, 같은 출력 경로의 파일은 새 실행 결과로 덮어씁니다. 제조 불량 class `1`이 희소하므로 PR-AUC를 주 지표로 사용하며, 기존 20% historical hold-out은 평가하거나 변경하지 않습니다. 이번 결과는 단일 5-fold Stratified CV이며 repeated CV, threshold tuning, 비용 함수, temporal validation은 후속 단계 범위입니다.
 
+### Repeated CV stability analysis
+
+Validation 3.1 결과에서 dummy 기준선, 최고 non-dummy 조합, 다른 classifier의 최고 조합, feature-selection 비교 조합을 결정적 규칙으로 최대 4개 선정합니다. 기본 평가는 기존 outer hold-out을 건드리지 않고 outer-train에서 5-fold × 5 repeats를 수행하며, 모든 후보가 동일한 split을 공유해 PR-AUC를 paired comparison합니다.
+
+```powershell
+python scripts/run_repeated_cv.py --from-validation-results reports/fold_safe_modeling/fold_safe_results.json --candidate all_features:dummy_prior
+python scripts/run_repeated_cv.py --from-validation-results reports/fold_safe_modeling/fold_safe_results.json --candidate all_features:dummy_prior --resume
+python scripts/run_repeated_cv.py --from-validation-results reports/fold_safe_modeling/fold_safe_results.json --all-candidates
+python scripts/run_repeated_cv.py --from-validation-results reports/fold_safe_modeling/fold_safe_results.json --finalize
+```
+
+조합별 결과는 `reports/repeated_cv/parts/`에 원자적으로 저장되며, 설정과 dataset·split fingerprint가 같은 완전한 JSON/CSV만 `--resume`으로 재사용합니다. 최종화하면 split 지표, repeat 요약, paired delta, 순위 안정성 JSON/CSV가 `reports/repeated_cv/`에 생성됩니다. 이 디렉터리는 Git에서 제외됩니다.
+
+반복 fold의 training data는 서로 겹치므로 25개 결과를 독립 표본처럼 해석하거나 p-value로 과장하지 않습니다. 후보도 Validation 3.1에서 정한 exploratory shortlist이며 외부 검증을 거친 최종 선택이 아닙니다. threshold 최적화와 시간 순서 기반 검증은 아직 적용하지 않았습니다.
+
 ## 13. Tech Stack
 
 - Python 3.13

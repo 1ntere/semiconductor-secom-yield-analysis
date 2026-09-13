@@ -6,6 +6,16 @@ UCI SECOM 데이터로 반도체 제조 공정의 Pass/Fail 패턴을 살펴보�
 
 공정 측정값은 `Attribute 1`부터 `Attribute 590`까지 익명화되어 있습니다. 예측 관계는 분석할 수 있지만 개별 Feature를 온도, 압력, 장비 상태와 같은 실제 공정 변수로 해석할 수는 없습니다.
 
+### 한눈에 보기
+
+- **문제:** 1,567개 생산 개체 중 Fail은 104개(6.64%)뿐이고, 590개 익명 Feature에는 결측·상수·중복·고상관 변수가 섞여 있습니다.
+- **접근:** 데이터 품질 자동 검증에서 fold-safe 모델 비교, repeated CV, 비용 기반 threshold, 제한적 시간순 검증과 PSI drift 분석까지 검증 범위를 단계적으로 강화했습니다.
+- **핵심 결과:** repeated CV에서 `all_features × random_forest_balanced`의 mean PR-AUC는 **0.2070**이었습니다. Correlation-pruned RF 대비 평균 차이는 **+0.0106**이고 25개 split에서 15승·10패여서 압도적 우위로 해석하지 않습니다.
+- **운영 판단:** 예시 FN:FP 10:1에서 비용 선택 정책은 기본 정책 대비 비용 단위를 830에서 645로 줄였지만 precision은 0.1493이었습니다.
+- **한계:** 시간순 PR-AUC는 0.0857~0.1848로 불안정했고 threshold 0.5에서는 세 구간 모두 Fail을 탐지하지 못했습니다. 미래 제조 성능이나 실제 공정 원인을 주장할 수 없습니다.
+
+평가 범위가 다른 수치는 직접적인 성능 향상·하락으로 비교하지 않습니다. 자세한 사례는 [포트폴리오 케이스 스터디](docs/portfolio_case_study.md)에서 확인할 수 있습니다.
+
 ## 2. Dataset
 
 | 항목 | 내용 |
@@ -47,6 +57,8 @@ UCI SECOM 데이터로 반도체 제조 공정의 Pass/Fail 패턴을 살펴보�
 | `05_modeling.ipynb` | Modeling | Feature subset과 기본 모델을 stratified CV로 비교하고 train OOF 예측으로 threshold를 결정한 뒤 hold-out Test를 평가합니다. |
 | `06_explainability.ipynb` | Explainability | RF impurity, permutation importance, Fail-class SHAP, TP/FP/FN 사례와 보조 모델의 차이를 분석합니다. |
 
+Notebook 01~06은 최초 분석의 historical 결과로 보존합니다. 이후 Improvement 1~6은 품질 리포트와 더 엄격한 검증 코드를 별도 모듈·스크립트로 추가했습니다.
+
 ## 5. Key Data Findings
 
 - 전체 결측률: **4.53%**
@@ -73,7 +85,7 @@ UCI SECOM 데이터로 반도체 제조 공정의 Pass/Fail 패턴을 살펴보�
 
 Modeling CV에서 Subset D는 전체 442개 또는 correlation-pruned 270개보다 높은 PR-AUC를 기록했습니다. 이에 Subset D를 최종 RandomForest 후보에 사용했습니다. 다만 Subset C/D selection이 각 CV fold 안에서 완전히 중첩되지는 않았습니다.
 
-## 7. Modeling
+## 7. Historical Modeling
 
 Primary metric은 희소한 Fail 클래스의 precision-recall trade-off를 반영하는 Average Precision(PR-AUC)으로 정했습니다. Accuracy 단독으로 모델을 선택하지 않았습니다.
 
@@ -93,7 +105,7 @@ Primary metric은 희소한 Fail 클래스의 precision-recall trade-off를 반�
 
 ![Cross-validation PR-AUC comparison](docs/figures/modeling_cv_pr_auc_comparison.png)
 
-Feature selection이 전체 outer-train에서 수행된 뒤 CV가 적용되었으므로, 해당 결과는 historical baseline이며 완전한 fold-safe 추정치가 아닙니다.
+Feature selection이 전체 outer-train에서 수행된 뒤 CV가 적용되었으므로, CV PR-AUC 0.2743은 historical baseline이며 완전한 fold-safe 추정치가 아닙니다. Test PR-AUC 0.2335는 당시 Notebook에서 이미 평가한 random hold-out 결과입니다. 이후 Improvement 3~6이 사용하지 않은 20% hold-out과 혼동해 프로젝트 전체에서 “한 번도 보지 않은 최종 test”라고 표현하지 않습니다.
 
 ![Final hold-out PR and ROC curves](docs/figures/modeling_final_pr_roc_curves.png)
 
@@ -139,7 +151,23 @@ FP와 TP는 예측 확률 및 주요 Feature 공간에서 크게 겹쳤습니다
 - Test의 Fail이 21개, FN이 3개뿐이므로 오류 유형 및 permutation importance의 불확실성이 큽니다.
 - 현재 결과는 단일 hold-out split에서 얻었으며 외부 제조 환경에 대한 일반화 성능을 입증하지 않습니다.
 
-## 11. Repository Structure
+## 11. Validation Results by Scope
+
+다음 결과는 split과 목적이 서로 다릅니다. 같은 조건의 leaderboard나 성능 향상·하락으로 비교하지 않습니다.
+
+| 평가 | 범위와 목적 | 주요 결과 | 해석 경계 |
+|---|---|---|---|
+| Historical Notebook | outer-train에서 selection 후 CV, 당시 random hold-out 평가 | CV PR-AUC 0.274255, hold-out 0.233475 | CV selection이 완전한 fold-safe 구조가 아님 |
+| Fold-safe 단일 CV | random outer-training 내부 5-fold, 16조합 | all-features RF 0.219918 | 단일 5-fold 탐색 결과 |
+| Repeated CV | 같은 outer-training 내부 5-fold × 5-repeat, 후보 4개 | all-features RF 0.207031; correlation RF 0.196414; HistGB 0.189125; dummy 0.066237 | 겹치는 25개 fold는 독립 표본이 아님 |
+| 비용 threshold | 5 outer fold마다 3-fold inner OOF로 선택 | FN:FP 1:1 기본 83 vs 선택 85; 5:1 선택 392 vs 기본 415; 10:1 선택 645 vs 기본 830 | 예시 비용 단위, calibration 없음 |
+| Temporal + drift | random outer-training의 expanding 3-split | PR-AUC 0.0857, 0.1848, 0.1008; 0.5에서 양성 예측 0건 | 독립 미래 검증이 아니며 PSI는 원인 증거가 아님 |
+
+Repeated CV의 all-features RF와 correlation-pruned RF 간 paired 차이는 평균 +0.010617이고 15승·10패였습니다. FN:FP 10:1 비용 선택 정책은 recall 0.5181, precision 0.1493이어서 불량 누락 감소와 추가 확인 대상 증가를 함께 판단해야 합니다. Inner OOF와 outer 재학습 모델의 확률 척도가 다를 수 있습니다.
+
+Timestamp 1,567건은 모두 파싱됐지만 timezone, 생산 순서 보장, lot·wafer 식별자는 없습니다. Temporal 결과와 PSI 상위 Feature를 미래 생산 성능, 설비 이상 또는 수율 저하 원인으로 해석하지 않습니다.
+
+## 12. Repository Structure
 
 ```text
 semiconductor-secom-yield-analysis/
@@ -150,6 +178,7 @@ semiconductor-secom-yield-analysis/
 │   ├── raw/                 # ignored except .gitkeep
 │   └── processed/           # ignored except .gitkeep
 ├── docs/
+│   ├── portfolio_case_study.md
 │   └── figures/             # selected public README figures
 ├── notebooks/
 │   ├── 01_data_understanding.ipynb
@@ -158,15 +187,16 @@ semiconductor-secom-yield-analysis/
 │   ├── 04_feature_selection.ipynb
 │   ├── 05_modeling.ipynb
 │   └── 06_explainability.ipynb
-├── src/
-│   └── load_data.py
+├── scripts/                 # quality, CV, threshold, temporal CLI
+├── src/                     # reusable validation/report modules
+├── tests/                   # focused unit and CLI tests
 └── reports/                 # generated reports and figures; ignored
     └── figures/
 ```
 
 Local `.venv/`와 `.cache/`도 Git에서 제외됩니다.
 
-## 12. Reproduction
+## 13. Reproduction
 
 Python 3.13 환경에서 실행했습니다.
 
@@ -179,12 +209,17 @@ jupyter lab
 
 Windows Python Launcher가 해당 버전을 찾지 못하면 설치된 Python 3.13 인터프리터의 전체 경로로 `-m venv .venv`를 실행할 수 있습니다. 가상환경 활성화 후에는 `.venv`의 `python`을 사용합니다.
 
-Notebook은 `01_data_understanding.ipynb`부터 `06_explainability.ipynb`까지 번호 순서로 실행합니다. 데이터는 `ucimlrepo`를 통해 내려받으므로 최초 실행 시 네트워크 연결이 필요합니다.
+Notebook은 `01_data_understanding.ipynb`부터 `06_explainability.ipynb`까지 번호 순서로 실행합니다. 데이터는 `ucimlrepo`를 통해 내려받으므로 Notebook 또는 `--uci-secom` 최초 실행에는 네트워크 연결이 필요합니다. 생성 데이터와 JSON·CSV·HTML 결과는 `reports/` 아래에 저장되며 Git에서 제외됩니다.
 
-데이터 품질 검증 모듈의 단위 테스트는 프로젝트 루트에서 다음과 같이 실행합니다.
+개선 단계별 가벼운 관련 테스트는 다음처럼 개별 실행합니다.
 
 ```powershell
 python -m pytest tests/test_data_quality.py
+python -m pytest tests/test_quality_report.py
+python -m pytest tests/test_fold_safe_modeling.py
+python -m pytest tests/test_repeated_cv.py
+python -m pytest tests/test_cost_threshold.py
+python -m pytest tests/test_temporal_validation.py
 ```
 
 ### Data quality report
@@ -212,7 +247,7 @@ python scripts/run_fold_safe_modeling.py --uci-secom
 python scripts/run_fold_safe_modeling.py --input-csv PATH --target-column class
 ```
 
-식별자나 파생 결과 컬럼은 `--exclude-column COLUMN`을 반복해 명시적으로 제외할 수 있습니다. 기본 결과는 Git에서 제외된 `reports/fold_safe_modeling/fold_safe_results.json`과 `fold_safe_fold_metrics.csv`에 저장되며, 같은 출력 경로의 파일은 새 실행 결과로 덮어씁니다. 제조 불량 class `1`이 희소하므로 PR-AUC를 주 지표로 사용하며, 기존 20% historical hold-out은 평가하거나 변경하지 않습니다. 이번 결과는 단일 5-fold Stratified CV이며 repeated CV, threshold tuning, 비용 함수, temporal validation은 후속 단계 범위입니다.
+식별자나 파생 결과 컬럼은 `--exclude-column COLUMN`을 반복해 제외할 수 있습니다. 결과는 `reports/fold_safe_modeling/`에 저장됩니다. 이 단일 5-fold 결과를 바탕으로 repeated CV, 비용 threshold, temporal validation도 별도 스크립트에서 완료했습니다.
 
 ### Repeated CV stability analysis
 
@@ -227,7 +262,7 @@ python scripts/run_repeated_cv.py --from-validation-results reports/fold_safe_mo
 
 조합별 결과는 `reports/repeated_cv/parts/`에 원자적으로 저장되며, 설정과 dataset·split fingerprint가 같은 완전한 JSON/CSV만 `--resume`으로 재사용합니다. 최종화하면 split 지표, repeat 요약, paired delta, 순위 안정성 JSON/CSV가 `reports/repeated_cv/`에 생성됩니다. 이 디렉터리는 Git에서 제외됩니다.
 
-반복 fold의 training data는 서로 겹치므로 25개 결과를 독립 표본처럼 해석하거나 p-value로 과장하지 않습니다. 후보도 Validation 3.1에서 정한 exploratory shortlist이며 외부 검증을 거친 최종 선택이 아닙니다. threshold 최적화와 시간 순서 기반 검증은 아직 적용하지 않았습니다.
+반복 fold의 training data는 서로 겹치므로 25개 결과를 독립 표본처럼 해석하지 않습니다. 후보도 exploratory shortlist이며 외부 검증을 거친 최종 선택이 아닙니다. 비용 threshold와 시간순 결과는 아래의 서로 다른 평가 범위로 해석합니다.
 
 ### Cost-based threshold sensitivity analysis
 
@@ -255,7 +290,7 @@ python scripts/run_temporal_validation.py --input-csv PATH --target-column class
 
 Feature drift는 training-only quantile bin과 별도 missing bin으로 PSI를 계산합니다. PSI는 변화 후보를 정렬하는 탐색적 휴리스틱이며 원인, 설비 고장 또는 인과관계를 뜻하지 않습니다. 결과는 Git에서 제외된 `reports/temporal_validation/`의 strict JSON, 성능 CSV, feature drift CSV에 저장됩니다.
 
-## 13. Tech Stack
+## 14. Tech Stack
 
 - Python 3.13
 - pandas, NumPy
@@ -265,12 +300,10 @@ Feature drift는 training-only quantile bin과 별도 missing bin으로 PSI를 �
 - JupyterLab
 - ucimlrepo
 
-## 14. Future Work
+## 15. Future Work
 
-- Repeated stratified CV로 성능 추정의 변동성 확인
-- False Negative와 False Positive 비용을 반영한 cost-sensitive threshold 최적화
-- Resampling을 fold 내부에 제한한 imbalance 처리 방법 비교
-- XGBoost 또는 LightGBM 등 외부 boosting 모델의 통제된 비교
-- Timestamp 순서를 고려한 temporal validation
-- Lot, wafer, 장비 및 공정 단계 metadata가 제공될 경우 그룹·시간 기반 검증
-- 독립적인 제조 데이터에서 외부 검증
+- Lot, wafer, 장비 및 공정 단계 metadata를 확보해 group-aware·시간 기반 누수를 검증합니다.
+- 별도의 최신 제조 기간과 외부 라인 데이터에서 모델·threshold를 독립 검증합니다.
+- Training fold 내부에만 resampling을 적용해 불균형 처리 방법을 통제 비교합니다.
+- 독립 validation에서 probability calibration 필요성을 판단한 뒤 비용 정책을 재검증합니다.
+- 익명 Attribute와 실제 공정 변수의 mapping 및 도메인 전문가 검토 없이는 원인 분석으로 확장하지 않습니다.
